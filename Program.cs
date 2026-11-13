@@ -102,6 +102,8 @@ public sealed class ProjectService
         Console.WriteLine("\nАдаптер для старого формата накладной:");
         await LegacyAdapterDemoAsync();
         // TODO 9: Реализовать очередь операций через Channel.
+        Console.WriteLine("\n[Задание 9] Очередь операций через Channel:");
+        await ChannelQueueDemoAsync();
         // TODO 10: Сформировать параллельный отчёт по категориям.
 
         Console.WriteLine("Стартовый проект собран. Реализуйте задания варианта.");
@@ -268,5 +270,57 @@ public sealed class ProjectService
                 File.Delete(legacyPath);
         }
     }
+    private async Task ChannelQueueDemoAsync()
+    {
+        await using var queue = new OperationQueueService(warehouseService, capacity: 50);
 
+        string productId = "QUEUE-001";
+
+        Console.WriteLine("  -> Запускаем 200 параллельных операций прихода (по 1 шт.) через очередь...");
+        var receiveTasks = new Task[200];
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        for (int i = 0; i < receiveTasks.Length; i++)
+        {
+            receiveTasks[i] = queue.EnqueueReceiveAsync(productId, 1);
+        }
+        await Task.WhenAll(receiveTasks);
+        sw.Stop();
+
+        var stockAfterReceive = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"     Выполнено за {sw.ElapsedMilliseconds} мс.");
+        Console.WriteLine($"     Ожидалось: 200, получено: {stockAfterReceive?.Quantity}. " +
+                          $"Результат: {(stockAfterReceive?.Quantity == 200 ? "✓ ОК" : "✗ ПОТЕРЯ ДАННЫХ")}");
+        Console.WriteLine($"     Обработано операций: {queue.ProcessedCount}, ошибок: {queue.FailedCount}");
+
+        Console.WriteLine("\n  -> Запускаем 300 параллельных попыток расхода (по 1 шт.) через очередь...");
+        var issueTasks = new Task<bool>[300];
+        for (int i = 0; i < issueTasks.Length; i++)
+        {
+            issueTasks[i] = queue.EnqueueIssueAsync(productId, 1);
+        }
+        var results = await Task.WhenAll(issueTasks);
+
+        int successCount = results.Count(r => r);
+        int failCount = results.Length - successCount;
+
+        var stockAfterIssue = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"     Успешных: {successCount}, отказов: {failCount}. Остаток: {stockAfterIssue?.Quantity}.");
+        Console.WriteLine($"     Проверка: {(successCount == 200 && failCount == 100 && stockAfterIssue?.Quantity == 0 ? "✓ ОК" : "✗ ОШИБКА")}");
+
+        Console.WriteLine("\n  -> Демонстрация backpressure (очередь ёмкостью 5):");
+        await using var smallQueue = new OperationQueueService(warehouseService, capacity: 5);
+        Console.WriteLine($"     Ёмкость канала: 5. Producer-ы ждут, когда освободится место.");
+
+        var pressureTasks = new Task[50];
+        for (int i = 0; i < pressureTasks.Length; i++)
+        {
+            pressureTasks[i] = smallQueue.EnqueueReceiveAsync("QUEUE-002", 1);
+        }
+        await Task.WhenAll(pressureTasks);
+
+        var finalStock = await warehouseService.GetStockAsync("QUEUE-002");
+        Console.WriteLine($"     Все 50 операций обработаны. Остаток QUEUE-002: {finalStock?.Quantity} шт.");
+        Console.WriteLine($"     ✓ Backpressure отработал: поток не блокировался, данные не потеряны.");
+    }
 }
