@@ -31,6 +31,7 @@ public sealed class ProjectService
     private readonly WarehouseService warehouseService = new();
     private readonly InvoiceImportService invoiceImportService = new();
     private readonly ValidatorService validatorService = new();
+    private readonly SettingsService settingsService = new();
     public async Task RunAsync()
     {
         // TODO: перенесите предметную логику в отдельные методы и классы.
@@ -93,7 +94,8 @@ public sealed class ProjectService
         Console.WriteLine("  -> Подключена через ProjectReference.");
         Console.WriteLine("  -> Namespace: WarehouseLib.Models / WarehouseLib.Services.");
         // TODO 7: Сохранять настройки склада в HKCU.
-
+        Console.WriteLine("\nСохранение и чтение настроек склада в HKCU:");
+        await SettingsDemoAsync();
 
         // TODO 8: Добавить адаптер для старого формата накладной.
         // TODO 9: Реализовать очередь операций через Channel.
@@ -186,6 +188,40 @@ public sealed class ProjectService
             Console.WriteLine($"  -> Ошибка импорта: {ex.Message}");
         }
     }
+    private async Task SettingsDemoAsync()
+    {
+        var newSettings = new WarehouseSettings
+        {
+            WarehouseName = "Склад №42",
+            WarehousePath = @"D:\Warehouse\Data",
+            DefaultCurrency = "RUB",
+            MinStockWarning = 25
+        };
 
+        Console.WriteLine("  -> Сохраняем настройки:");
+        Console.WriteLine($"     {newSettings}");
+        await settingsService.SaveAsync(newSettings);
+
+        Console.WriteLine("\n  -> Читаем настройки из хранилища:");
+        var loadedSettings = await settingsService.LoadAsync();
+        Console.WriteLine($"     {loadedSettings}");
+
+        bool ok = loadedSettings.WarehouseName == newSettings.WarehouseName
+               && loadedSettings.WarehousePath == newSettings.WarehousePath
+               && loadedSettings.DefaultCurrency == newSettings.DefaultCurrency
+               && loadedSettings.MinStockWarning == newSettings.MinStockWarning;
+
+        Console.WriteLine($"\n  -> Проверка: {(ok ? "✓ Все значения совпадают" : "✗ Данные повреждены")}");
+
+        if (OperatingSystem.IsWindows())
+        {
+            Console.WriteLine("\n  -> Совет: откройте regedit и перейдите в:");
+            Console.WriteLine($"     HKEY_CURRENT_USER\\{SettingsServiceExtensions.RegistryPathHint}");
+        }
+    }
+    internal static class SettingsServiceExtensions
+    {
+        public const string RegistryPathHint = @"Software\Variant10\Warehouse";
+    }
 
 }
