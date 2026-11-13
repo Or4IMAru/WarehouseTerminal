@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Channels;
 using Variant10.Models;
+using Variant10.Services;
 
 namespace Variant10;
 
@@ -26,6 +27,7 @@ internal static class Program
 
 public sealed class ProjectService
 {
+    private readonly WarehouseService warehouseService = new();
     public async Task RunAsync()
     {
         // TODO: перенесите предметную логику в отдельные методы и классы.
@@ -48,9 +50,24 @@ public sealed class ProjectService
 
         Console.WriteLine($"Товар: {sampleProduct.Name}, Категория: {sampleProduct.Category}, Остаток: {sampleStock.Quantity} шт.");
 
-        // TODO 2: Реализовать приход и расход товара.
+        // TODO 2: Реализовать приход и расход товара. -- WarehouseService.cs
+        Console.WriteLine("\n[Задание 2] Тестирование прихода и расхода товара:");
 
+        string productId = "PROD-001";
+
+        await warehouseService.ReceiveGoodsAsync(productId, 100);
+        var stock1 = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"  -> Приход 100 шт. Текущий остаток: {stock1?.Quantity} шт.");
+
+        bool success = await warehouseService.IssueGoodsAsync(productId, 30);
+        var stock2 = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"  -> Расход 30 шт. Успешно: {success}. Текущий остаток: {stock2?.Quantity} шт.");
+
+        bool failSuccess = await warehouseService.IssueGoodsAsync(productId, 200);
+        var stock3 = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"  -> Попытка расхода 200 шт. Успешно: {failSuccess}. Текущий остаток: {stock3?.Quantity} шт. (не изменился)");
         // TODO 3: Обработать несколько операций одновременно без потери обновлений.
+
         // TODO 4: Добавить импорт накладной из текстового файла асинхронно.
         // TODO 5: Запустить внешнюю программу-валидатор через Process.
         // TODO 6: Вынести складскую логику в DLL и подключить её через ProjectReference.
