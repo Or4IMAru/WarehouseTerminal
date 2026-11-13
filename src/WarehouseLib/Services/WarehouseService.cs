@@ -5,6 +5,7 @@ namespace WarehouseLib.Services;
 public sealed class WarehouseService
 {
     private readonly Dictionary<string, StockItem> _stock = new();
+    private readonly Dictionary<string, Product> _products = new();
     private readonly object _lock = new();
 
     public Task ReceiveGoodsAsync(string productId, int quantity)
@@ -82,8 +83,30 @@ public sealed class WarehouseService
                     };
                 }
                 totalReceived += line.Quantity;
+                _products[line.ProductId] = new Product
+                {
+                    Id = line.ProductId,
+                    Name = line.ProductName,
+                    Category = line.Category,
+                    Price = line.Price
+                };
             }
         }
         return Task.FromResult(totalReceived);
+    }
+    public Task<IReadOnlyList<(Product Product, StockItem Stock)>> GetAllStockWithProductsAsync()
+    {
+        lock (_lock)
+        {
+            var result = new List<(Product, StockItem)>();
+            foreach (var (productId, stock) in _stock)
+            {
+                if (_products.TryGetValue(productId, out var product))
+                {
+                    result.Add((product, stock));
+                }
+            }
+            return Task.FromResult<IReadOnlyList<(Product, StockItem)>>(result);
+        }
     }
 }

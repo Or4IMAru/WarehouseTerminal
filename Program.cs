@@ -33,6 +33,7 @@ public sealed class ProjectService
     private readonly ValidatorService validatorService = new();
     private readonly SettingsService settingsService = new();
     private readonly LegacyInvoiceAdapter legacyAdapter = new();
+    private readonly ReportService reportService = new();
     public async Task RunAsync()
     {
         // TODO: перенесите предметную логику в отдельные методы и классы.
@@ -105,6 +106,9 @@ public sealed class ProjectService
         Console.WriteLine("\n[Задание 9] Очередь операций через Channel:");
         await ChannelQueueDemoAsync();
         // TODO 10: Сформировать параллельный отчёт по категориям.
+        Console.WriteLine("\n[Задание 10] Параллельный отчёт по категориям:");
+        await CategoryReportDemoAsync();
+
 
         Console.WriteLine("Стартовый проект собран. Реализуйте задания варианта.");
         await Task.CompletedTask;
@@ -322,5 +326,30 @@ public sealed class ProjectService
         var finalStock = await warehouseService.GetStockAsync("QUEUE-002");
         Console.WriteLine($"     Все 50 операций обработаны. Остаток QUEUE-002: {finalStock?.Quantity} шт.");
         Console.WriteLine($"     ✓ Backpressure отработал: поток не блокировался, данные не потеряны.");
+    }
+    private async Task CategoryReportDemoAsync()
+    {
+        var stockData = await warehouseService.GetAllStockWithProductsAsync();
+        Console.WriteLine($"  -> Получено данных о {stockData.Count} позициях со склада.");
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var report = await reportService.GenerateCategoryReportAsync(stockData);
+        sw.Stop();
+
+        Console.WriteLine($"  -> Отчёт сформирован за {sw.ElapsedMilliseconds} мс.");
+        Console.WriteLine($"  -> Дата формирования: {report.GeneratedAt:yyyy-MM-dd HH:mm:ss}");
+        Console.WriteLine();
+
+        Console.WriteLine($"  {"Категория",-20} | {"Позиций",8} | {"Кол-во",8} | {"Сумма, ₽",12}");
+        Console.WriteLine("  " + new string('-', 58));
+        foreach (var line in report.Lines)
+        {
+            Console.WriteLine($"  {line.Category,-20} | {line.ProductCount,8} | {line.TotalQuantity,8} | {line.TotalValue,12:N2}");
+        }
+        Console.WriteLine("  " + new string('-', 58));
+        Console.WriteLine($"  {"ИТОГО",-20} | {report.TotalProducts,8} | {report.TotalQuantity,8} | {report.TotalValue,12:N2}");
+
+        Console.WriteLine($"\n  -> Параллелизм: использовано потоков: {Environment.ProcessorCount}.");
+        Console.WriteLine($"  -> ✓ Отчёт сформирован параллельно по категориям.");
     }
 }
