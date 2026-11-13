@@ -2,7 +2,7 @@
 
 namespace WarehouseLib.Services;
 
-public sealed class InvoiceImportService
+public sealed class InvoiceImportService : IInvoiceImporter
 {
     public async Task<Invoice> ImportAsync(string filePath)
     {

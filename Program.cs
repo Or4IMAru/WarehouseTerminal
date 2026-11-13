@@ -32,6 +32,7 @@ public sealed class ProjectService
     private readonly InvoiceImportService invoiceImportService = new();
     private readonly ValidatorService validatorService = new();
     private readonly SettingsService settingsService = new();
+    private readonly LegacyInvoiceAdapter legacyAdapter = new();
     public async Task RunAsync()
     {
         // TODO: перенесите предметную логику в отдельные методы и классы.
@@ -98,6 +99,8 @@ public sealed class ProjectService
         await SettingsDemoAsync();
 
         // TODO 8: Добавить адаптер для старого формата накладной.
+        Console.WriteLine("\nАдаптер для старого формата накладной:");
+        await LegacyAdapterDemoAsync();
         // TODO 9: Реализовать очередь операций через Channel.
         // TODO 10: Сформировать параллельный отчёт по категориям.
 
@@ -222,6 +225,48 @@ public sealed class ProjectService
     internal static class SettingsServiceExtensions
     {
         public const string RegistryPathHint = @"Software\Variant10\Warehouse";
+    }
+    private async Task LegacyAdapterDemoAsync()
+    {
+        const string legacyPath = "LEGACY-2026-042.inv";
+
+        var legacyContent =
+            "SUPPLIER:ООО Старый Поставщик\n" +
+            "DATE:2026/11/13\n" +
+            "ITEMS_COUNT:3\n" +
+            "Клавиатура|PROD-200|50|2500.00|Периферия\n" +
+            "Мышь|PROD-201|120|800.00|Периферия\n" +
+            "Монитор|PROD-202|15|15000.00|Электроника\n";
+
+        await File.WriteAllTextAsync(legacyPath, legacyContent);
+        Console.WriteLine($"  -> Создан тестовый файл в старом формате: {legacyPath}");
+
+        try
+        {
+            IInvoiceImporter importer = legacyAdapter;
+            var invoice = await importer.ImportAsync(legacyPath);
+
+            Console.WriteLine($"  -> Адаптер успешно импортировал накладную:");
+            Console.WriteLine($"     Номер (из имени файла): {invoice.Number}");
+            Console.WriteLine($"     Дата (сконвертирована из yyyy/MM/dd): {invoice.Date:yyyy-MM-dd}");
+            Console.WriteLine($"     Позиций: {invoice.Lines.Count}");
+
+            foreach (var line in invoice.Lines)
+                Console.WriteLine($"       • {line.ProductName} ({line.ProductId}): {line.Quantity} шт. × {line.Price} ₽");
+
+            int totalReceived = await warehouseService.ApplyInvoiceAsync(invoice);
+            Console.WriteLine($"  -> Оприходовано через общий интерфейс: {totalReceived} шт.");
+
+            Console.WriteLine("\n  -> Полиморфизм: оба импортёра реализуют IInvoiceImporter:");
+            IInvoiceImporter[] importers = { invoiceImportService, legacyAdapter };
+            foreach (var imp in importers)
+                Console.WriteLine($"     • {imp.GetType().Name}");
+        }
+        finally
+        {
+            if (File.Exists(legacyPath))
+                File.Delete(legacyPath);
+        }
     }
 
 }
