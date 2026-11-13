@@ -29,6 +29,7 @@ public sealed class ProjectService
 {
     private readonly WarehouseService warehouseService = new();
     private readonly InvoiceImportService invoiceImportService = new();
+    private readonly ValidatorService validatorService = new();
     public async Task RunAsync()
     {
         // TODO: перенесите предметную логику в отдельные методы и классы.
@@ -74,12 +75,22 @@ public sealed class ProjectService
 
         // TODO 4: Добавить импорт накладной из текстового файла асинхронно.
         Console.WriteLine("\n Асинхронный импорт накладной из файла:");
-        await ImportInvoiceDemoAsync();
+        const string invoicePath = "invoice_sample.txt";
+        await ImportInvoiceDemoAsync(invoicePath);
 
-        // TODO 5: Запустить внешнюю программу-валидатор через Process.
+        // TODO 5: Запустить внешнюю программу-валидатор через Process.-- ValidatorService.cs
+        bool isValid = await validatorService.ValidateInvoiceAsync(invoicePath);
+        Console.WriteLine($"  -> Результат валидации: {(isValid ? "✓ Файл корректен" : "✗ Файл не прошёл проверку")}");
 
+        const string invalidInvoicePath = "invalid_invoice.txt";
+        await File.WriteAllTextAsync(invalidInvoicePath, "NOT_AN_INVOICE\nSome data");
+        bool isInvalid = await validatorService.ValidateInvoiceAsync(invalidInvoicePath);
+        Console.WriteLine($"  -> Результат валидации некорректного файла: {(isInvalid ? "✓ Файл корректен" : "✗ Файл не прошёл проверку (ожидаемо)")}");
+        File.Delete(invalidInvoicePath);
         // TODO 6: Вынести складскую логику в DLL и подключить её через ProjectReference.
+
         // TODO 7: Сохранять настройки склада в HKCU.
+
 
         // TODO 8: Добавить адаптер для старого формата накладной.
         // TODO 9: Реализовать очередь операций через Channel.
@@ -87,6 +98,8 @@ public sealed class ProjectService
 
         Console.WriteLine("Стартовый проект собран. Реализуйте задания варианта.");
         await Task.CompletedTask;
+        if (File.Exists(invoicePath))
+            File.Delete(invoicePath);
     }
     private async Task StressTestAsync(string productId)
     {
@@ -125,10 +138,8 @@ public sealed class ProjectService
                           $"Остаток: {stockAfterIssue?.Quantity}.");
         Console.WriteLine($"  -> Проверка: {(successCount == 1000 && failCount == 500 && stockAfterIssue?.Quantity == 0 ? "✓ ОК" : "✗ ОШИБКА СИНХРОНИЗАЦИИ")}");
     }
-    private async Task ImportInvoiceDemoAsync()
+    private async Task ImportInvoiceDemoAsync(string invoicePath)
     {
-        const string invoicePath = "invoice_sample.txt";
-
         var invoiceContent =
             "INV-2026-001;2026-11-13\n" +
             "PROD-100;Клавиатура;Периферия;2500.00;50\n" +
@@ -167,11 +178,11 @@ public sealed class ProjectService
                 Console.WriteLine($"     ✓ Ошибка перехвачена: {ex.Message}");
             }
         }
-        finally
+        catch (Exception ex)
         {
-            if (File.Exists(invoicePath))
-                File.Delete(invoicePath);
+            Console.WriteLine($"  -> Ошибка импорта: {ex.Message}");
         }
     }
+
 
 }
