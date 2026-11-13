@@ -28,6 +28,7 @@ internal static class Program
 public sealed class ProjectService
 {
     private readonly WarehouseService warehouseService = new();
+    private readonly InvoiceImportService invoiceImportService = new();
     public async Task RunAsync()
     {
         // TODO: перенесите предметную логику в отдельные методы и классы.
@@ -66,12 +67,17 @@ public sealed class ProjectService
         bool failSuccess = await warehouseService.IssueGoodsAsync(productId, 200);
         var stock3 = await warehouseService.GetStockAsync(productId);
         Console.WriteLine($"  -> Попытка расхода 200 шт. Успешно: {failSuccess}. Текущий остаток: {stock3?.Quantity} шт. (не изменился)");
+
         // TODO 3: Обработать несколько операций одновременно без потери обновлений.
         Console.WriteLine("\nСтресс-тест параллельных операций:");
         await StressTestAsync(productId);
+
         // TODO 4: Добавить импорт накладной из текстового файла асинхронно.
+        Console.WriteLine("\n Асинхронный импорт накладной из файла:");
+        await ImportInvoiceDemoAsync();
 
         // TODO 5: Запустить внешнюю программу-валидатор через Process.
+
         // TODO 6: Вынести складскую логику в DLL и подключить её через ProjectReference.
         // TODO 7: Сохранять настройки склада в HKCU.
 
@@ -119,4 +125,53 @@ public sealed class ProjectService
                           $"Остаток: {stockAfterIssue?.Quantity}.");
         Console.WriteLine($"  -> Проверка: {(successCount == 1000 && failCount == 500 && stockAfterIssue?.Quantity == 0 ? "✓ ОК" : "✗ ОШИБКА СИНХРОНИЗАЦИИ")}");
     }
+    private async Task ImportInvoiceDemoAsync()
+    {
+        const string invoicePath = "invoice_sample.txt";
+
+        var invoiceContent =
+            "INV-2026-001;2026-11-13\n" +
+            "PROD-100;Клавиатура;Периферия;2500.00;50\n" +
+            "PROD-101;Мышь;Периферия;800.00;120\n" +
+            "PROD-102;Монитор;Электроника;15000.00;15\n";
+
+        await File.WriteAllTextAsync(invoicePath, invoiceContent);
+        Console.WriteLine($"  -> Создан тестовый файл: {invoicePath}");
+
+        try
+        {
+            var invoice = await invoiceImportService.ImportAsync(invoicePath);
+            Console.WriteLine($"  -> Импортирована накладная №{invoice.Number} от {invoice.Date:yyyy-MM-dd}, позиций: {invoice.Lines.Count}");
+
+            foreach (var line in invoice.Lines)
+            {
+                Console.WriteLine($"     • {line.ProductName} ({line.ProductId}): {line.Quantity} шт. × {line.Price} ₽");
+            }
+
+            int totalReceived = await warehouseService.ApplyInvoiceAsync(invoice);
+            Console.WriteLine($"  -> Оприходовано всего: {totalReceived} шт.");
+
+            foreach (var line in invoice.Lines)
+            {
+                var stock = await warehouseService.GetStockAsync(line.ProductId);
+                Console.WriteLine($"     • Остаток {line.ProductId}: {stock?.Quantity} шт.");
+            }
+
+            Console.WriteLine("\n  -> Проверка обработки ошибок (несуществующий файл):");
+            try
+            {
+                await invoiceImportService.ImportAsync("nonexistent.txt");
+            }
+            catch (FileNotFoundException ex)
+            {
+                Console.WriteLine($"     ✓ Ошибка перехвачена: {ex.Message}");
+            }
+        }
+        finally
+        {
+            if (File.Exists(invoicePath))
+                File.Delete(invoicePath);
+        }
+    }
+
 }

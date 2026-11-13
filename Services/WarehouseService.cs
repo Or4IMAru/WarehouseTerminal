@@ -60,4 +60,32 @@ public sealed class WarehouseService
             return Task.FromResult(_stock.TryGetValue(productId, out var item) ? item : null);
         }
     }
+    public Task<int> ApplyInvoiceAsync(Invoice invoice)
+    {
+        if (invoice == null) throw new ArgumentNullException(nameof(invoice));
+
+        int totalReceived = 0;
+        lock (_lock)
+        {
+            foreach (var line in invoice.Lines)
+            {
+                if (_stock.TryGetValue(line.ProductId, out var item))
+                {
+                    item.Quantity += line.Quantity;
+                    item.LastUpdated = DateTime.UtcNow;
+                }
+                else
+                {
+                    _stock[line.ProductId] = new StockItem
+                    {
+                        ProductId = line.ProductId,
+                        Quantity = line.Quantity,
+                        LastUpdated = DateTime.UtcNow
+                    };
+                }
+                totalReceived += line.Quantity;
+            }
+        }
+        return Task.FromResult(totalReceived);
+    }
 }
