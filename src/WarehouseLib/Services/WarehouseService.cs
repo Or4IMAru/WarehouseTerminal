@@ -1,16 +1,15 @@
-﻿using Variant10.Models;
+﻿using WarehouseLib.Models;
 
-namespace Variant10.Services;
+namespace WarehouseLib.Services;
 
 public sealed class WarehouseService
 {
     private readonly Dictionary<string, StockItem> _stock = new();
     private readonly object _lock = new();
- 
+
     public Task ReceiveGoodsAsync(string productId, int quantity)
     {
-        if (quantity <= 0)
-            throw new ArgumentException("Количество должно быть больше нуля", nameof(quantity));
+        if (quantity <= 0) throw new ArgumentException("Количество должно быть больше нуля", nameof(quantity));
 
         lock (_lock)
         {
@@ -29,14 +28,12 @@ public sealed class WarehouseService
                 };
             }
         }
-
         return Task.CompletedTask;
     }
 
     public Task<bool> IssueGoodsAsync(string productId, int quantity)
     {
-        if (quantity <= 0)
-            throw new ArgumentException("Количество должно быть больше нуля", nameof(quantity));
+        if (quantity <= 0) throw new ArgumentException("Количество должно быть больше нуля", nameof(quantity));
 
         lock (_lock)
         {
@@ -60,6 +57,7 @@ public sealed class WarehouseService
             return Task.FromResult(_stock.TryGetValue(productId, out var item) ? item : null);
         }
     }
+
     public Task<int> ApplyInvoiceAsync(Invoice invoice)
     {
         if (invoice == null) throw new ArgumentNullException(nameof(invoice));

@@ -1,6 +1,6 @@
-﻿using Variant10.Models;
+﻿using WarehouseLib.Models;
 
-namespace Variant10.Services;
+namespace WarehouseLib.Services;
 
 public sealed class InvoiceImportService
 {

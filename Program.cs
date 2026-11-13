@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Channels;
-using Variant10.Models;
+using WarehouseLib.Models;
+using WarehouseLib.Services;
 using Variant10.Services;
 
 namespace Variant10;
@@ -88,7 +89,9 @@ public sealed class ProjectService
         Console.WriteLine($"  -> Результат валидации некорректного файла: {(isInvalid ? "✓ Файл корректен" : "✗ Файл не прошёл проверку (ожидаемо)")}");
         File.Delete(invalidInvoicePath);
         // TODO 6: Вынести складскую логику в DLL и подключить её через ProjectReference.
-
+        Console.WriteLine("\n Складская логика вынесена в DLL WarehouseLib.");
+        Console.WriteLine("  -> Подключена через ProjectReference.");
+        Console.WriteLine("  -> Namespace: WarehouseLib.Models / WarehouseLib.Services.");
         // TODO 7: Сохранять настройки склада в HKCU.
 
 

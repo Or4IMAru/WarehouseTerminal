@@ -1,4 +1,4 @@
-﻿namespace Variant10.Models;
+﻿namespace WarehouseLib.Models;
 
 public class StockItem
 {
