@@ -51,7 +51,7 @@ public sealed class ProjectService
         Console.WriteLine($"Товар: {sampleProduct.Name}, Категория: {sampleProduct.Category}, Остаток: {sampleStock.Quantity} шт.");
 
         // TODO 2: Реализовать приход и расход товара. -- WarehouseService.cs
-        Console.WriteLine("\n[Задание 2] Тестирование прихода и расхода товара:");
+        Console.WriteLine("\nТестирование прихода и расхода товара:");
 
         string productId = "PROD-001";
 
@@ -67,8 +67,10 @@ public sealed class ProjectService
         var stock3 = await warehouseService.GetStockAsync(productId);
         Console.WriteLine($"  -> Попытка расхода 200 шт. Успешно: {failSuccess}. Текущий остаток: {stock3?.Quantity} шт. (не изменился)");
         // TODO 3: Обработать несколько операций одновременно без потери обновлений.
-
+        Console.WriteLine("\nСтресс-тест параллельных операций:");
+        await StressTestAsync(productId);
         // TODO 4: Добавить импорт накладной из текстового файла асинхронно.
+
         // TODO 5: Запустить внешнюю программу-валидатор через Process.
         // TODO 6: Вынести складскую логику в DLL и подключить её через ProjectReference.
         // TODO 7: Сохранять настройки склада в HKCU.
@@ -79,5 +81,42 @@ public sealed class ProjectService
 
         Console.WriteLine("Стартовый проект собран. Реализуйте задания варианта.");
         await Task.CompletedTask;
+    }
+    private async Task StressTestAsync(string productId)
+    {
+        var current = await warehouseService.GetStockAsync(productId);
+        if (current != null)
+        {
+            await warehouseService.IssueGoodsAsync(productId, current.Quantity);
+        }
+
+        const int receiveCount = 1000;
+        var receiveTasks = new Task[receiveCount];
+        for (int i = 0; i < receiveCount; i++)
+        {
+            receiveTasks[i] = warehouseService.ReceiveGoodsAsync(productId, 1);
+        }
+        await Task.WhenAll(receiveTasks);
+
+        var stockAfterReceive = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"  -> Параллельный приход {receiveCount} раз по 1 шт. " +
+                          $"Ожидалось: {receiveCount}, получено: {stockAfterReceive?.Quantity}. " +
+                          $"Результат: {(stockAfterReceive?.Quantity == receiveCount ? "✓ ОК" : "✗ ПОТЕРЯ ДАННЫХ")}");
+        const int issueAttempts = 1500;
+        var issueTasks = new Task<bool>[issueAttempts];
+        for (int i = 0; i < issueAttempts; i++)
+        {
+            issueTasks[i] = warehouseService.IssueGoodsAsync(productId, 1);
+        }
+        var results = await Task.WhenAll(issueTasks);
+
+        int successCount = results.Count(r => r);
+        int failCount = results.Length - successCount;
+
+        var stockAfterIssue = await warehouseService.GetStockAsync(productId);
+        Console.WriteLine($"  -> Параллельный расход: {issueAttempts} попыток. " +
+                          $"Успешных: {successCount}, отказов: {failCount}. " +
+                          $"Остаток: {stockAfterIssue?.Quantity}.");
+        Console.WriteLine($"  -> Проверка: {(successCount == 1000 && failCount == 500 && stockAfterIssue?.Quantity == 0 ? "✓ ОК" : "✗ ОШИБКА СИНХРОНИЗАЦИИ")}");
     }
 }
